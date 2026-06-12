@@ -2,10 +2,12 @@ import { query } from "@anthropic-ai/claude-agent-sdk";
 
 // Agentic loop: streams messages as Claude works
 for await (const message of query({
+  
   prompt: "Review utils.py for bugs that would cause crashes. Fix any issues you find.",
   options: {
     allowedTools: ["Read", "Edit", "Glob"], // Auto-approve these tools
-    permissionMode: "acceptEdits" // Auto-approve file edits
+    permissionMode: "acceptEdits", // Auto-approve file edits
+    model: "haiku",
   }
 })) {
   // Print human-readable output
