@@ -1,7 +1,8 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 
 for await (const message of query({
-  prompt: "Use the docs MCP server to explain what sessions are in Claude Code. Then summarize how to manage sessions on Claude Agent SDK calls.",
+  // prompt: "Use the docs MCP server to explain what sessions are in Claude Code. Then summarize how to manage sessions on Claude Agent SDK calls.",
+  prompt: "Use the docs MCP server to summarize how to manage permissions on Claude Agent SDK calls. ",
   options: {
     mcpServers: {
       "claude-code-docs": {
@@ -72,4 +73,60 @@ In the SDK, **each `query()` call starts a fresh session by default** — no mem
 **Helper functions** (both SDKs) for building pickers, cleanup, or organization: `listSessions()`/`getSessionMessages()` and `getSessionInfo()`/`renameSession()`/`tagSession()` (TS), and the `snake_case` equivalents in Python.
 
 One note connecting the two surfaces: sessions created via the SDK (or `claude -p`) **don't appear in the CLI `/resume` picker**, but you can still resume one from the CLI by passing its ID to `claude --resume <session-id>`.
+*/
+
+/*
+"Use the docs MCP server to summarize how to manage permissions on Claude Agent SDK calls."
+
+I've read the full `permissions.mdx` page from the Agent SDK docs. Here's a summary of how to manage permissions on Claude Agent SDK calls.
+
+## Managing Permissions in the Claude Agent SDK
+
+The SDK gives you three layers of control over how Claude uses tools: **declarative allow/deny rules**, **permission modes**, and a runtime **`canUseTool` callback**.
+
+### Evaluation order
+When Claude requests a tool, the SDK checks, in this exact sequence:
+
+1. **Hooks** — run first; can deny outright or pass through. A hook returning `allow` does *not* skip the deny/ask rules below.
+2. **Deny rules** (`disallowed_tools` + `settings.json`) — block the call, even in `bypassPermissions`.
+3. **Ask rules** (`settings.json`) — route the call to your `canUseTool` callback (denied instead in `dontAsk` mode).
+4. **Permission mode** — applies the active mode's behavior.
+5. **Allow rules** (`allowed_tools` + `settings.json`) — approve if matched.
+6. **`canUseTool` callback** — final fallback for anything unresolved (skipped/denied in `dontAsk`).
+
+### Allow & deny rules
+`allowedTools` / `disallowedTools` (TS) — `allowed_tools` / `disallowed_tools` (Python):
+
+- `allowed_tools=["Read","Grep"]` → auto-approves those tools; unlisted tools still exist and fall through to the mode.
+- `disallowed_tools=["Bash"]` → bare name removes the tool from Claude's context entirely.
+- `disallowed_tools=["Bash(rm *)"]` → Bash stays, but `rm *` calls are denied in **every** mode (including bypass).
+- `disallowed_tools=["*"]` → removes all tools.
+- **Globs:** deny rules support `*` and `mcp__*`. Allow rules only accept globs after a literal `mcp__<server>__` prefix (e.g. `mcp__puppeteer__*`). Unanchored allows like `["*"]` are ignored with a warning.
+- For a locked-down agent, pair `allowedTools` with `permissionMode: "dontAsk"`.
+
+### Permission modes
+Set via `permissionMode` (TS) / `permission_mode` (Python):
+
+| Mode | Behavior |
+|------|----------|
+| `default` | No auto-approvals; unmatched tools hit `canUseTool`. |
+| `dontAsk` | Anything not pre-approved is **denied**; `canUseTool` never called. |
+| `acceptEdits` | Auto-approves file edits + filesystem ops (`mkdir`, `rm`, `mv`, `cp`, `sed`) within the working dir / `additionalDirectories`. |
+| `bypassPermissions` | Approves everything (hooks & deny rules still apply). Use with extreme caution. |
+| `plan` | Read-only exploration; file edits never auto-approved, always prompt via `canUseTool`. |
+| `auto` (TS only) | A model classifier approves/denies each call. |
+
+**Subagent inheritance:** if the parent is `bypassPermissions`, `acceptEdits`, or `auto`, subagents inherit it and can't override it (an explicit ask rule still forces a prompt).
+
+### Setting the mode
+- **At query time:** pass `permissionMode`/`permission_mode` in options — applies for the whole session.
+- **Dynamically mid-session:** call `setPermissionMode()` (TS) / `set_permission_mode()` (Python) — takes effect immediately. Useful to start restrictive and loosen (e.g. switch to `acceptEdits`) as trust builds.
+
+### Key gotchas
+- `allowed_tools` does **not** constrain `bypassPermissions` — every tool runs regardless. To block specific tools under bypass, use `disallowed_tools`.
+- Deny rules, explicit ask rules, and hooks are evaluated *before* the mode check, so they can block tools even in bypass mode.
+- `settings.json` rules apply only when the `project` setting source is enabled (default for `query()`; if you set `settingSources`/`setting_sources` explicitly, include `"project"`).
+
+### Related
+For interactive runtime approvals, use the **`canUseTool` callback** (see "Handle approvals and user input"). For custom logic at lifecycle points, use **hooks**. For the declarative rule syntax, see **Permission rules** in `settings.json`.
 */
